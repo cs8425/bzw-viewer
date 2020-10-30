@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>bzflag map viewer</title>
+		<meta name="viewport" content="width=device-width, minimum-scale=1.0">
+		<style>
+			body {
+				margin: 0;
+				font-family: Monospace;
+				font-size: 13px;
+				line-height: 24px;
+				overscroll-behavior: none;
+				background-color: #ccc;
+				color: #000;
+			}
+
+			a {
+				color: #ff0;
+				text-decoration: none;
+			}
+
+			a:hover {
+				text-decoration: underline;
+			}
+
+			button {
+				cursor: pointer;
+				text-transform: uppercase;
+			}
+
+			canvas,canvas:focus,canvas:hover{
+				outline:none;
+			}
+			canvas {
+				display: block;
+			}
+
+			a, button, input, select {
+				pointer-events: auto;
+			}
+
+			#info {
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				padding: 10px;
+				box-sizing: border-box;
+				text-align: center;
+				-moz-user-select: none;
+				-webkit-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				pointer-events: none;
+				z-index: 1; /* TODO Solve this in HTML */
+			}
+		</style>
+	</head>
+
+	<body>
+		<div id="info">
+			<input id="mapfile" type='file' accept='.bzw'>
+		</div>
+	</body>
+<script type="module">
+	// fps
+	import Stats from './stats.module.js';
+	const stats = new Stats();
+	stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+	document.body.appendChild( stats.dom );
+
+	import * as THREE from './three.module.js';
+
+	import { OrbitControls } from './OrbitControls.js';
+
+	var camera, controls, scene, renderer;
+	var geometry, material, mesh;
+	var group;
+
+	init();
+	animate();
+
+	function init() {
+
+		scene = new THREE.Scene();
+		scene.background = new THREE.Color( 0xcccccc );
+		//scene.fog = new THREE.FogExp2( 0xcccccc, 0.002 );
+
+		renderer = new THREE.WebGLRenderer( { antialias: true } );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		document.body.appendChild( renderer.domElement );
+
+		camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
+		camera.position.set( 0, 100, -100 );
+
+		// controls
+
+		controls = new OrbitControls( camera, renderer.domElement );
+		controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+		controls.dampingFactor = 0.05;
+		controls.screenSpacePanning = false;
+		controls.minDistance = 0.1;
+		controls.maxDistance = 8000;
+
+
+		// world
+
+		// helpers
+		var helpers = new THREE.Object3D();
+		helpers.add( new THREE.GridHelper( 500, 50 ) );
+		helpers.add( new THREE.AxesHelper( 150 ) );
+		scene.add( helpers );
+
+		// MESH with GEOMETRY, and Normal MATERIAL
+		//material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+		//material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
+		material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
+
+		// lights
+		const W = 100
+		const H = 200
+		var lpos = [
+			[  W,  H,  W, 0xaaaaaa],
+			[ -W,  H,  W, 0xaaaaaa],
+			[  W,  H, -W, 0xaaaaaa],
+			[ -W,  H, -W, 0xaaaaaa],
+
+			[  W, -H,  W, 0x070707],
+			[ -W, -H,  W, 0x070707],
+			[  W, -H, -W, 0x070707],
+			[ -W, -H, -W, 0x070707],
+		];
+		while (lpos.length) {
+			var pos = lpos.pop()
+			var light = new THREE.DirectionalLight( pos[3], 0.8 );
+			light.position.set( pos[0], pos[1], pos[2] );
+			scene.add( light );
+		}
+
+		var light = new THREE.AmbientLight( 0x222222 );
+		scene.add( light );
+
+		//
+
+		group = new THREE.Group();
+		scene.add( group );
+
+		window.addEventListener( 'resize', onWindowResize, false );
+
+		let fileInput = document.querySelector('#mapfile');
+		fileInput.addEventListener( 'change', loadMap, false );
+	}
+
+	function onWindowResize() {
+
+		camera.aspect = window.innerWidth / window.innerHeight;
+		camera.updateProjectionMatrix();
+
+		renderer.setSize( window.innerWidth, window.innerHeight );
+
+	}
+
+	function animate() {
+
+		requestAnimationFrame( animate );
+
+		controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+		render();
+
+	}
+
+	function render() {
+		stats.begin();
+		renderer.render( scene, camera );
+		stats.end();
+	}
+
+	function loadMap(e) {
+		//console.log('[loadMap]', e)
+		let input = event.target;
+		if (!input.files[0]) return;
+		let reader = new FileReader();
+		reader.onload = function(e){
+			//console.log('[loadMap][data]', e, reader)
+			let mapText = reader.result;
+			let map = parseMap(mapText);
+
+			for (var i = group.children.length - 1; i >= 0; i--) {
+				var obj = group.children[i];
+				group.remove(obj); 
+			}
+			group.add(map);
+		};
+		reader.readAsText(input.files[0]);
+	}
+
+	function parseMap(mapText) {
+		let lines = mapText.split('\n');
+
+		let state = 0;
+		let objs = [];
+		let tmp = null;
+		for(let i = 0; i < lines.length; i++){
+			let text = lines[i].trim();
+			//console.log(text);
+			switch (state) {
+			case 0:
+				if (text.startsWith('#')) continue; // comment
+				if (text == '') continue;
+
+				tmp = {
+					type: text,
+					param: [],
+				};
+				state = 1;
+				break;
+
+
+			case 1: // in object
+				if (text == 'end') {
+					objs.push(tmp);
+					tmp = null;
+					state = 0;
+				} else {
+					tmp.param.push(text.replace(/ +/g, " "));
+				}
+				break;
+			}
+		}
+		console.log('[objs]', objs);
+		let map = parseObjs(objs);
+		console.log('[map]', map);
+		return map;
+	}
+
+	function parseObjs(objs) {
+		const deg2rad = Math.PI / 180;
+		let parseFn = {
+			'box': (obj) => {
+				const geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
+				const material = new THREE.MeshLambertMaterial( {color: 0x00ff00, side: THREE.DoubleSide} );
+				const mesh = new THREE.Mesh( geometry, material );
+				const out = new THREE.Group();
+				out.add(mesh);
+				let param = obj.param;
+				for(let i = 0; i < param.length; i++){
+					let info = param[i].split(' ')
+					switch(info[0]){
+					case 'position':
+						out.position.set( parseFloat(info[1]), parseFloat(info[2]), parseFloat(info[3]) );
+						break;
+					case 'rotation':
+						//mesh.rotation.set(0, 0, parseFloat(info[1] * deg2rad));
+						mesh.rotateZ(parseFloat(info[1] * deg2rad));
+						break;
+					case 'size':
+						mesh.geometry = new THREE.BoxBufferGeometry( parseFloat(info[1])*2, parseFloat(info[2])*2, parseFloat(info[3])*2 );
+						//mesh.scale.fromArray(info, 1);
+						mesh.position.z = parseFloat(info[3]);
+						break;
+					}
+				}
+				return out;
+			},
+			'pyramid': (obj) => {
+				const geometry = new THREE.ConeBufferGeometry( 1, 1, 4 );
+				const material = new THREE.MeshLambertMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
+				const mesh = new THREE.Mesh( geometry, material );
+				mesh.rotateX(Math.PI / 2);
+				const out = new THREE.Group();
+				out.add(mesh);
+				let param = obj.param;
+				for(let i = 0; i < param.length; i++){
+					let info = param[i].split(' ')
+					switch(info[0]){
+					case 'position':
+						out.position.set( parseFloat(info[1]), parseFloat(info[2]), parseFloat(info[3]) );
+						break;
+					case 'rotation':
+						//mesh.rotation.set(0, 0, parseFloat(info[1] * deg2rad));
+						//mesh.rotateZ(parseFloat(info[1] * deg2rad));
+						//out.rotateY(parseFloat(info[1] * deg2rad));
+						out.rotateZ(parseFloat(info[1] * deg2rad));
+						break;
+					case 'size':
+						mesh.geometry = new THREE.ConeBufferGeometry( 1, parseFloat(info[3]), 4 );
+						mesh.scale.set( parseFloat(info[1]), 1, parseFloat(info[2]))
+						mesh.position.z = parseFloat(info[3]) / 2;
+						//mesh.scale.fromArray(info, 1);
+						break;
+					}
+				}
+				return out;
+			},
+
+
+			'teleporter': (obj) => {
+
+			},
+			'link': (obj) => {
+
+			},
+		};
+		let out = new THREE.Group();
+		for(let i = 0; i < objs.length; i++){
+			let obj = objs[i];
+			let fn = parseFn[obj.type];
+			if (!fn) continue;
+
+			let o3d = fn(obj);
+			if (o3d) out.add(o3d);
+		}
+		out.rotateX(-Math.PI / 2);
+		return out;
+	}
+
+	function loadByHash(e) {
+		var param = (window.location.hash).split('#!')
+		if(param.length > 1) {
+			var loader = new THREE.FileLoader();
+			loader.load( param[1], function ( mapText ) {
+				//console.log('load', mapText)
+				if (!mapText) return;
+
+				let map = parseMap(mapText);
+
+				for (var i = group.children.length - 1; i >= 0; i--) {
+					var obj = group.children[i];
+					group.remove(obj); 
+				}
+				group.add(map);
+			} );
+		}
+	}
+	window.addEventListener("hashchange", loadByHash, false);
+	loadByHash()
+
+</script>
+</html>
+
