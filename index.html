@@ -63,6 +63,9 @@
 		</div>
 	</body>
 <script type="module">
+	import {GUI} from './dat.gui.module.js';
+	var gui = new GUI();
+
 	// fps
 	import Stats from './stats.module.js';
 	const stats = new Stats();
@@ -75,7 +78,27 @@
 
 	var camera, controls, scene, renderer;
 	var geometry, material, mesh;
+	var textureUV;
 	var group;
+	let textures = {
+		'none': null,
+		'UV-1024': new THREE.TextureLoader().load( 'res/UVCheckerMap01-1024.png' ),
+		'UV-512': new THREE.TextureLoader().load( 'res/UVCheckerMap01-512.png' ),
+	}
+	let viewData = {
+		'box': {
+			color: 0x505050,
+			opacity: 1.0,
+			texture: null,
+			material: new THREE.MeshLambertMaterial( {transparent:true, side: THREE.DoubleSide} ),
+		},
+		'pyramid': {
+			color: 0xffff00,
+			opacity: 1.0,
+			texture: null,
+			material: new THREE.MeshLambertMaterial( {transparent:true, side: THREE.DoubleSide} ),
+		}
+	};
 
 	init();
 	animate();
@@ -112,11 +135,6 @@
 		helpers.add( new THREE.AxesHelper( 200 ) );
 		scene.add( helpers );
 
-		// MESH with GEOMETRY, and Normal MATERIAL
-		//material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
-		//material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
-		material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
-
 		// lights
 		const W = 100
 		const H = 200
@@ -144,9 +162,14 @@
 		//
 
 		group = new THREE.Group();
+		group.resetTransform = resetTransform;
 		scene.add( group );
 
 		window.addEventListener( 'resize', onWindowResize, false );
+
+
+		// init UI
+		initGUI();
 
 		let fileInput = document.querySelector('#mapfile');
 		fileInput.addEventListener( 'change', loadMap, false );
@@ -175,6 +198,50 @@
 		stats.begin();
 		renderer.render( scene, camera );
 		stats.end();
+	}
+
+	function initGUI() {
+		let texList = Object.keys(textures);
+		for (let typ in viewData) {
+			let data = viewData[typ];
+			const folder = gui.addFolder(typ);
+			folder.addColor(data, 'color').name('Color').onChange(onDataUpdate);
+			folder.add(data, 'opacity', 0, 1, 0.025).name('Opacity').onChange(onDataUpdate);
+
+			let dropdown = gui.add(data, 'texture', texList).onChange(onDataUpdate);
+			dropdown.setValue(texList[0]);
+
+			folder.open();
+		}
+
+		let trans = gui.addFolder('Transform');
+		trans.add(group.position, 'x', -800, 800, 1).name('Position X').onChange(onDataUpdate).listen();
+		trans.add(group.position, 'y', -800, 800, 1).name('Position Y').onChange(onDataUpdate).listen();
+		trans.add(group.position, 'z', -800, 800, 1).name('Position Z').onChange(onDataUpdate).listen();
+		trans.add(group.rotation, 'x', -Math.PI, Math.PI, 0.5*Math.PI/180.0).name('Rotation X').onChange(onDataUpdate).listen();
+		trans.add(group.rotation, 'y', -Math.PI, Math.PI, 0.5*Math.PI/180.0).name('Rotation Y').onChange(onDataUpdate).listen();
+		trans.add(group.rotation, 'z', -Math.PI, Math.PI, 0.5*Math.PI/180.0).name('Rotation Z').onChange(onDataUpdate).listen();
+		trans.add(group.scale, 'x', 0.01, 2, 0.01).name('scale X').onChange(onDataUpdate).listen();
+		trans.add(group.scale, 'y', 0.01, 2, 0.01).name('scale Y').onChange(onDataUpdate).listen();
+		trans.add(group.scale, 'z', 0.01, 2, 0.01).name('scale Z').onChange(onDataUpdate).listen();
+		trans.add(group, 'resetTransform');
+
+		onDataUpdate();
+	}
+	function onDataUpdate(e) {
+		for (let typ in viewData) {
+			let data = viewData[typ];
+			data.material.color.set(data.color);
+			data.material.opacity = data.opacity;
+			data.material.map = textures[data.texture];
+			data.material.needsUpdate = true;
+		}
+	}
+	function resetTransform() {
+		group.position.set(0, 0, 0);
+		group.rotation.set(0, 0, 0);
+		group.scale.set(1.0, 1.0, 1.0);
+		onDataUpdate();
 	}
 
 	function loadMap(e) {
@@ -238,9 +305,8 @@
 	function parseObjs(objs) {
 		const deg2rad = Math.PI / 180;
 		let parseFn = {
-			'box': (obj) => {
+			'box': (obj, material) => {
 				const geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
-				const material = new THREE.MeshLambertMaterial( {color: 0x00ff00, side: THREE.DoubleSide} );
 				const mesh = new THREE.Mesh( geometry, material );
 				const out = new THREE.Group();
 				out.add(mesh);
@@ -264,9 +330,8 @@
 				}
 				return out;
 			},
-			'pyramid': (obj) => {
+			'pyramid': (obj, material) => {
 				const geometry = new THREE.ConeBufferGeometry( 1, 1, 4 );
-				const material = new THREE.MeshLambertMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
 				const mesh = new THREE.Mesh( geometry, material );
 				mesh.rotateX(Math.PI / 2);
 				const out = new THREE.Group();
@@ -296,10 +361,10 @@
 			},
 
 
-			'teleporter': (obj) => {
+			'teleporter': (obj, material) => {
 
 			},
-			'link': (obj) => {
+			'link': (obj, material) => {
 
 			},
 		};
@@ -309,7 +374,8 @@
 			let fn = parseFn[obj.type];
 			if (!fn) continue;
 
-			let o3d = fn(obj);
+			let material = viewData[obj.type]?.material;
+			let o3d = fn(obj, material);
 			if (o3d) out.add(o3d);
 		}
 		out.rotateX(-Math.PI / 2);
