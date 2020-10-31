@@ -2,6 +2,9 @@
 simple BZFlag map viewer, power by WebGL(Three.js).
 
 
+online demo by github pages: [https://cs8425.github.io/bzw-viewer/](https://cs8425.github.io/bzw-viewer/)
+
+
 ## Screenshot
 to add...
 
