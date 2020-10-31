@@ -108,8 +108,8 @@
 
 		// helpers
 		var helpers = new THREE.Object3D();
-		helpers.add( new THREE.GridHelper( 500, 50 ) );
-		helpers.add( new THREE.AxesHelper( 150 ) );
+		helpers.add( new THREE.GridHelper( 800, 40 ) );
+		helpers.add( new THREE.AxesHelper( 200 ) );
 		scene.add( helpers );
 
 		// MESH with GEOMETRY, and Normal MATERIAL
@@ -224,7 +224,7 @@
 					tmp = null;
 					state = 0;
 				} else {
-					tmp.param.push(text.replace(/ +/g, " "));
+					tmp.param.push(text.replace(/\t+/g, " ").replace(/ +/g, " "));
 				}
 				break;
 			}
