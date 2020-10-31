@@ -82,8 +82,12 @@
 	var group;
 	let textures = {
 		'none': null,
-		'UV-1024': new THREE.TextureLoader().load( 'res/UVCheckerMap01-1024.png' ),
-		'UV-512': new THREE.TextureLoader().load( 'res/UVCheckerMap01-512.png' ),
+		'UV01-1024': new THREE.TextureLoader().load( 'res/UVCheckerMap01-1024.png' ),
+		'UV01-512': new THREE.TextureLoader().load( 'res/UVCheckerMap01-512.png' ),
+		'UV06-1024': new THREE.TextureLoader().load( 'res/UVCheckerMap06-1024.png' ),
+		'UV06-512': new THREE.TextureLoader().load( 'res/UVCheckerMap06-512.png' ),
+		'UV12-1024': new THREE.TextureLoader().load( 'res/UVCheckerMap12-1024.png' ),
+		'UV12-512': new THREE.TextureLoader().load( 'res/UVCheckerMap12-512.png' ),
 	}
 	let viewData = {
 		'box': {
@@ -115,7 +119,7 @@
 		document.body.appendChild( renderer.domElement );
 
 		camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
-		camera.position.set( 0, 100, -100 );
+		camera.position.set( 0, 700, -700 );
 
 		// controls
 
