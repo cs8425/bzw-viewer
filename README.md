@@ -4,6 +4,8 @@ simple BZFlag map viewer, power by WebGL(Three.js).
 
 online demo by github pages: [https://cs8425.github.io/bzw-viewer/](https://cs8425.github.io/bzw-viewer/)
 
+HiX2 experimental world demo: [https://cs8425.github.io/bzw-viewer/#!sample/hix.bzw](https://cs8425.github.io/bzw-viewer/#!sample/hix.bzw)
+
 
 ## Screenshot
 to add...
